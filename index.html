@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>The Cool Arcade</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="joystick.png">
+
+<style>
+    body {
+        background:#111;
+        color:#fff;
+        font-family:"Press Start 2P";
+        text-align:center;
+    }
+    
+    img {
+        width: 50px;
+        height: 50px;
+    }
+
+    h1 {
+        margin-top:20px;
+        color:#0f0;
+        text-shadow:0 0 10px #0f0;
+    }
+
+    .grid {
+        display:grid;
+        grid-template-columns:repeat(3, 1fr);
+        gap:20px;
+        width:90%;
+        margin:20px auto;
+    }
+
+    .item {
+        background:#222;
+        border:3px solid #0f0;
+        border-radius:10px;
+        padding:15px;
+        text-decoration:none;
+        color:#0f0;
+        box-shadow:0 0 10px #0f0;
+        transition:0.2s;
+    }
+
+    .item:hover {
+        background:#0f0;
+        color:#000;
+        box-shadow:0 0 15px #0f0;
+    }
+
+    .item img {
+        display:block;
+        margin:10px auto 0;
+        width:60px;
+        height:60px;
+        border-radius:6px;
+    }
+</style>
+</head>
+<body>
+
+<h1>The Cool Arcade</h1>
+
+<!-- ⭐ LIVE GLOBAL VISIT COUNTER -->
+<div style="color:#0f0; font-size:18px; margin-top:10px; text-shadow:0 0 8px #0f0;">
+    Live Visits: <span id="visits">loading...</span>
+</div>
+
+<script>
+// Increase counter ONCE per visit
+fetch("counter.php");
+
+// Update display without increasing
+function updateCounter() {
+    fetch("getcount.php")
+        .then(res => res.text())
+        .then(num => {
+            document.getElementById("visits").innerText = num;
+        })
+        .catch(err => {
+            document.getElementById("visits").innerText = "Error";
+            console.error(err);
+        });
+}
+
+updateCounter();
+setInterval(updateCounter, 2000);
+</script>
+
+<div class="grid">
+
+    <a class="item" href="games.php?file=snake.html">
+        Snake
+        <img src="snake.jpeg">
+    </a>
+
+    <a class="item" href="games.php?file=pong.html">
+        Pong
+        <img src="pong.jpeg">
+    </a>
+
+    <a class="item" href="games.php?file=tetris.html">
+        Tetris
+        <img src="tetris.jpeg">
+    </a>
+    
+    <a class="item" href="games.php?file=ghostescape.html">
+        Ghost Escape
+        <img src="ghostescape.jpeg">
+    </a>
+
+</div>
+
+<script>
+    alert("This website is currently being builded on. Some things might not work properly.");
+</script>
+    
+</body>
+</html>
