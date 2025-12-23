@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ping Pong</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="icon" type="image/png" href="joystick.png">
+    <a href="index.html"><button><i class="fa-solid fa-house"></i> HOME</button></a>
+  <style>
+    body{background:#000;color:#0ff;text-align:center;margin:0;padding:0;}
+    body,h1,h2,h3,input,button,div{font-family:'Press Start 2P',cursive;}
+
+    canvas{
+      background:#111;
+      border:3px solid #0ff;
+      margin-top:20px;
+    }
+
+    button{
+      margin:5px;
+      padding:5px 10px;
+      border:2px solid #0ff;
+      background:#111;
+      color:#0ff;
+      cursor:pointer;
+      font-size:10px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    button:hover{
+      background:#ff0;
+      color:#000;
+    }
+
+    input{
+      background:linear-gradient(135deg,#000,#0ff);
+      color:#fff;
+      border:2px solid #0ff;
+      padding:5px;
+      font-size:10px;
+    }
+    input::placeholder{color:#fff;}
+
+    .modal{
+      display:none;
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      background:#111;
+      border:3px solid #0ff;
+      padding:20px;
+      width:260px;
+      color:#0ff;
+      z-index:1000;
+    }
+
+    #overlay{
+      display:none;
+      position:fixed;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      background:rgba(0,0,0,0.7);
+      z-index:999;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Welcome to <span style="color:#0b0">Ping Pong</span>!</h1>
+<h1 id="scoreText">SCORE: 0</h1>
+<h2 id="highscore">HIGH SCORE: 0</h2>
+
+<button id="startBtn">START</button>
+<button id="pauseBtn"><i class="fa-solid fa-pause"></i> PAUSE</button>
+<button id="soundBtn"><i class="fa-solid fa-volume-up"></i> SOUND</button>
+<button id="settingsBtn"><i class="fa-solid fa-gear"></i> SETTINGS</button>
+<button id="infoBtn"><i class="fa-solid fa-circle-info"></i> INFO</button>
+
+<div>
+  <input id="username" placeholder="USERNAME">
+  <button id="addScore">ADD</button>
+</div>
+
+<div id="leaderboard"></div>
+
+<canvas id="game" width="400" height="300"></canvas>
+
+<div id="overlay"></div>
+
+<div id="settingsModal" class="modal">
+  <h2><i class="fa-solid fa-gear"></i> Settings</h2>
+  <p>Ball Speed: Default</p>
+  <button id="closeSettings">CLOSE</button>
+</div>
+
+<div id="infoModal" class="modal">
+  <h2><i class="fa-solid fa-circle-info"></i> Info</h2>
+  <p>Move paddle with Arrow Keys or A/D.</p>
+  <p>Keep the ball from touching the bottom!</p>
+  <button id="closeInfo">CLOSE</button>
+</div>
+    <div id="touch-controls" style="margin-top: 20px; text-align: center;">
+    <button id="btnLeft" style="
+        padding: 12px 20px;
+        margin: 5px;
+        font-size: 24px;
+        border-radius: 6px;
+        border: 2px solid #0ff;
+        background: #111;
+        color: #0ff;
+        font-weight: bold;
+    ">&larr;</button>
+
+    <button id="btnRight" style="
+        padding: 12px 20px;
+        margin: 5px;
+        font-size: 24px;
+        border-radius: 6px;
+        border: 2px solid #0ff;
+        background: #111;
+        color: #0ff;
+        font-weight: bold;
+    ">&rarr;</button>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let paddle={x:160,y:280,w:80,h:10,speed:6,dx:0};
+let ball={x:200,y:150,r:6,dx:3,dy:-3};
+let score=0,paused=false,gameOver=true,soundOn=true;
+
+const scoreText=document.getElementById("scoreText");
+const highscore=document.getElementById("highscore");
+const username=document.getElementById("username");
+const leaderboard=document.getElementById("leaderboard");
+const overlay=document.getElementById("overlay");
+const settingsModal=document.getElementById("settingsModal");
+const infoModal=document.getElementById("infoModal");
+
+const savedHigh=localStorage.getItem("pongHighScore");
+if(savedHigh) highscore.textContent="HIGH SCORE: "+savedHigh;
+
+function beep(){
+  if(!soundOn) return;
+  const a=new AudioContext();
+  const o=a.createOscillator();
+  const g=a.createGain();
+  o.connect(g);g.connect(a.destination);
+  o.frequency.value=300;
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+0.2);
+}
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="ArrowLeft"||e.key==="a") paddle.dx=-paddle.speed;
+  if(e.key==="ArrowRight"||e.key==="d") paddle.dx=paddle.speed;
+});
+
+document.addEventListener("keyup",e=>{
+  if(e.key==="ArrowLeft"||e.key==="a") paddle.dx=0;
+  if(e.key==="ArrowRight"||e.key==="d") paddle.dx=0;
+});
+const btnLeft = document.getElementById("btnLeft");
+const btnRight = document.getElementById("btnRight");
+
+// Hold LEFT
+btnLeft.addEventListener("mousedown", () => paddle.dx = -paddle.speed);
+btnLeft.addEventListener("touchstart", () => paddle.dx = -paddle.speed);
+
+// Hold RIGHT
+btnRight.addEventListener("mousedown", () => paddle.dx = paddle.speed);
+btnRight.addEventListener("touchstart", () => paddle.dx = paddle.speed);
+
+// Stop movement when released
+["mouseup", "mouseleave", "touchend", "touchcancel"].forEach(event => {
+    btnLeft.addEventListener(event, () => paddle.dx = 0);
+    btnRight.addEventListener(event, () => paddle.dx = 0);
+});
+
+function draw(){
+  ctx.fillStyle="#000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle="#0ff";
+  ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
+
+  ctx.beginPath();
+  ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
+  ctx.fillStyle="#0ff";
+  ctx.fill();
+
+  if(paused||gameOver) return;
+
+  paddle.x += paddle.dx;
+
+  if(paddle.x < 0) paddle.x = 0;
+  if(paddle.x + paddle.w > canvas.width) paddle.x = canvas.width - paddle.w;
+
+  ball.x+=ball.dx;
+  ball.y+=ball.dy;
+
+  if(ball.x<ball.r||ball.x>canvas.width-ball.r) ball.dx*=-1;
+  if(ball.y<ball.r) ball.dy*=-1;
+
+  if(ball.y>canvas.height-ball.r){
+    gameOver=true;
+    beep();
+    scoreText.textContent="GAME OVER! "+score;
+
+    let high=parseInt(localStorage.getItem("pongHighScore"))||0;
+    if(score>high){
+      localStorage.setItem("pongHighScore",score);
+      high=score;
+    }
+    highscore.textContent="HIGH SCORE: "+high;
+  }
+
+  if(
+    ball.y + ball.r + ball.dy >= paddle.y &&
+    ball.x >= paddle.x &&
+    ball.x <= paddle.x + paddle.w &&
+    ball.dy > 0
+  ){
+    ball.dy *= -1;
+    score++;
+    scoreText.textContent="SCORE: "+score;
+    beep();
+  }
+}
+
+setInterval(draw,16);
+
+document.getElementById("startBtn").onclick=()=>{
+  score=0;
+  scoreText.textContent="SCORE: 0";
+  ball.x=200;ball.y=150;ball.dx=3;ball.dy=-3;
+  paddle.x=160;paddle.dx=0;
+  gameOver=false;
+};
+
+document.getElementById("pauseBtn").onclick=()=>{
+  paused=!paused;
+  document.getElementById("pauseBtn").innerHTML=
+    paused?'<i class="fa-solid fa-play"></i> RESUME':
+           '<i class="fa-solid fa-pause"></i> PAUSE';
+};
+
+document.getElementById("soundBtn").onclick=()=>{
+  soundOn=!soundOn;
+  document.getElementById("soundBtn").innerHTML=
+    soundOn?'<i class="fa-solid fa-volume-up"></i> SOUND':
+             '<i class="fa-solid fa-volume-mute"></i> MUTE';
+};
+
+document.getElementById("settingsBtn").onclick=()=>{
+  overlay.style.display="block";
+  settingsModal.style.display="block";
+};
+
+document.getElementById("infoBtn").onclick=()=>{
+  overlay.style.display="block";
+  infoModal.style.display="block";
+};
+
+document.getElementById("closeSettings").onclick=
+document.getElementById("closeInfo").onclick=
+overlay.onclick=()=>{
+  overlay.style.display="none";
+  settingsModal.style.display="none";
+  infoModal.style.display="none";
+};
+
+document.getElementById("addScore").onclick=()=>{
+  if(!gameOver) return;
+  let name=username.value.trim();
+  if(!name) return;
+
+  let lb=JSON.parse(localStorage.getItem("pongLeaderboard"))||[];
+  let ex=lb.find(e=>e.name===name);
+
+  if(ex && score<=ex.score) return;
+  if(ex) ex.score=score;
+  else lb.push({name,score});
+
+  lb.sort((a,b)=>b.score-a.score);
+  lb=lb.slice(0,3);
+
+  localStorage.setItem("pongLeaderboard",JSON.stringify(lb));
+
+  leaderboard.innerHTML="<h3>LEADERBOARD</h3>";
+  lb.forEach((e,i)=>{
+    leaderboard.innerHTML+=`${i+1}. ${e.name} - ${e.score}<br>`;
+  });
+};
+</script>
+
+</body>
+</html>
