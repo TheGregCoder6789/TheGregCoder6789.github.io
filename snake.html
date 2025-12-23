@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Snake Game</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="icon" type="image/png" href="joystick.png">
+
+  <style>
+    #backtohome{left:0;top:0;}
+    body{background:#000;color:#0ff;text-align:center;}
+    body,h1,h2,h3,input,button,div{font-family:'Press Start 2P',cursive;}
+    input{background:linear-gradient(135deg,#000,#0ff);color:#fff;}
+    input::placeholder{color:#fff;opacity:1;}
+    .board{
+      width:300px;
+      height:300px;
+      border:3px solid #0ff;
+      margin:10px auto;
+      position:relative;
+      background:#111;
+    }
+    .segment{
+      position:absolute;
+    }
+    #apple{
+      position:absolute;
+      background:#f00;
+      background-size:cover;
+      background-position:center;
+    }
+    button{
+      margin:5px;padding:5px 10px;
+      border:2px solid #0ff;
+      background:#111;color:#0ff;
+      cursor:pointer;font-size:10px;
+      display:inline-flex;align-items:center;gap:6px;
+    }
+    button:hover{background:#ff0;color:#000;}
+    p{font-size:10px;}
+    .dirb{width:50px;height:50px;}
+    .modal{
+      display:none;position:fixed;
+      top:50%;left:50%;
+      transform:translate(-50%,-50%);
+      background:#111;border:3px solid #0ff;
+      padding:20px;width:260px;color:#0ff;
+      z-index:1000;
+    }
+    #overlay{
+      display:none;position:fixed;
+      top:0;left:0;width:100%;height:100%;
+      background:rgba(0,0,0,0.7);z-index:999;
+    }
+  </style>
+</head>
+
+<body>
+<a href="index.html"><button><i class="fa-solid fa-house"></i> HOME</button></a>
+
+<h1>Welcome to <span style="color:#0b0">Snake Game</span>!</h1>
+<h1 id="text">SCORE: 0</h1>
+<h2 id="highscore">HIGH SCORE: 0</h2>
+
+<button id="startBtn">START</button>
+<button id="resetBtn">RESET</button>
+<button id="pauseBtn"><i class="fa-solid fa-pause"></i> PAUSE</button>
+<button id="soundBtn"><i class="fa-solid fa-volume-up"></i> SOUND</button>
+<button id="settingsBtn"><i class="fa-solid fa-gear"></i> SETTINGS</button>
+<button id="infoBtn"><i class="fa-solid fa-circle-info"></i> INFO</button>
+
+<div>
+  <input id="username" placeholder="USERNAME">
+  <button id="addScore">ADD</button>
+</div>
+
+<!-- SKIN UPLOADS -->
+<p>Upload Head Skin (GIF OK):</p>
+<input type="file" id="headUpload" accept="image/*">
+
+<p>Upload Body Skin:</p>
+<input type="file" id="bodyUpload" accept="image/*">
+
+<p>Upload Apple Skin:</p>
+<input type="file" id="appleUpload" accept="image/*">
+
+<div id="leaderboard"></div>
+
+<div class="board">
+  <div id="apple"></div>
+</div>
+
+<div id="overlay"></div>
+
+<div id="settingsModal" class="modal">
+  <h2><i class="fa-solid fa-gear"></i> Settings</h2>
+
+  <p id="frames"></p>
+
+  <p>Board Width (units):</p>
+  <input id="boardUnitsX" type="number" value="10">
+
+  <p>Board Height (units):</p>
+  <input id="boardUnitsY" type="number" value="10">
+
+  <p>Tile Size (pixels per unit):</p>
+  <input id="tileSizeInput" type="number" value="30">
+
+  <button id="applySize">APPLY SIZE</button>
+  <button id="closeSettings">CLOSE</button>
+</div>
+
+<div id="infoModal" class="modal">
+  <h2><i class="fa-solid fa-circle-info"></i> Info</h2>
+  <p>How to play: Arrow Keys or WASD or the buttons at the bottom for mobile users.</p>
+  <p>Fps: 5,<br>Frames occur: Every 1/5 Second</p>
+  <button id="closeInfo">CLOSE</button>
+</div>
+
+<script>
+/* ---------------- CORE GAME VARIABLES ---------------- */
+let framesCount=0;
+const eatF=349.23,gameF=233.08,audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+let soundOn=true,paused=false,gameOver=true;
+let snake=[{top:0,left:0}],dr="right",score=0;
+const apple=document.getElementById("apple");
+
+const framesGet=document.getElementById("frames"),
+text=document.getElementById("text"),
+highscore=document.getElementById("highscore"),
+leaderboard=document.getElementById("leaderboard"),
+usernameInput=document.getElementById("username"),
+addButton=document.getElementById("addScore"),
+startBtn=document.getElementById("startBtn"),
+resetBtn=document.getElementById("resetBtn"),
+pauseBtn=document.getElementById("pauseBtn"),
+soundBtn=document.getElementById("soundBtn"),
+settingsBtn=document.getElementById("settingsBtn"),
+settingsModal=document.getElementById("settingsModal"),
+overlay=document.getElementById("overlay"),
+closeSettings=document.getElementById("closeSettings"),
+infoBtn=document.getElementById("infoBtn"),
+infoModal=document.getElementById("infoModal"),
+boardEl=document.querySelector(".board");
+
+/* ---------------- GRID / UNIT SYSTEM ---------------- */
+let unitsX = 10;
+let unitsY = 10;
+let tileSizePx = 30;
+
+function applyBoardSize() {
+  boardEl.style.width = (unitsX * tileSizePx) + "px";
+  boardEl.style.height = (unitsY * tileSizePx) + "px";
+
+  apple.style.width = tileSizePx + "px";
+  apple.style.height = tileSizePx + "px";
+}
+
+/* ---------------- SKIN SYSTEM ---------------- */
+let headSkin = null;
+let bodySkin = null;
+let appleSkin = null;
+
+// HEAD SKIN
+document.getElementById("headUpload").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => headSkin = img;
+  img.src = URL.createObjectURL(file);
+});
+
+// BODY SKIN
+document.getElementById("bodyUpload").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => bodySkin = img;
+  img.src = URL.createObjectURL(file);
+});
+
+// APPLE SKIN
+document.getElementById("appleUpload").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    appleSkin = img;
+    apple.style.background = "none";
+    apple.style.backgroundImage = `url(${appleSkin.src})`;
+    apple.style.backgroundSize = tileSizePx + "px " + tileSizePx + "px";
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+/* ---------------- GAME FUNCTIONS ---------------- */
+function setDir(d){
+  if(d==="r")dr="right";
+  else if(d==="l")dr="left";
+  else if(d==="u")dr="up";
+  else if(d==="d")dr="down";
+}
+
+function playNote(f,d=0.3){
+  if(!soundOn)return;
+  let o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type="sawtooth";o.frequency.value=f;o.connect(g);g.connect(audioCtx.destination);
+  o.start();g.gain.setValueAtTime(1,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);
+  o.stop(audioCtx.currentTime+d);
+}
+
+function setScore(s){text.textContent=s;}
+function setHigh(h){highscore.textContent=h;}
+
+const savedHigh=localStorage.getItem("snakeHighScore");
+if(savedHigh)setHigh("HIGH SCORE: "+savedHigh);
+
+/* --------- FIXED APPLE SPAWN: NEVER ON SNAKE --------- */
+function setApple() {
+  let randX, randY;
+  let valid = false;
+
+  while (!valid) {
+    randY = Math.floor(Math.random() * unitsY);
+    randX = Math.floor(Math.random() * unitsX);
+
+    const pxTop = randY * tileSizePx;
+    const pxLeft = randX * tileSizePx;
+
+    const onSnake = snake.some(seg => seg.top === pxTop && seg.left === pxLeft);
+
+    if (!onSnake) {
+      valid = true;
+      apple.style.top = pxTop + "px";
+      apple.style.left = pxLeft + "px";
+    }
+  }
+}
+
+function renderSnake(){
+  document.querySelectorAll(".segment").forEach(s=>s.remove());
+
+  snake.forEach((p,i)=>{
+    let s=document.createElement("div");
+    s.className="segment";
+    s.style.top=p.top+"px";
+    s.style.left=p.left+"px";
+    s.style.width=tileSizePx+"px";
+    s.style.height=tileSizePx+"px";
+
+    if(i===0 && headSkin){
+      s.style.background="none";
+      s.style.backgroundImage=`url(${headSkin.src})`;
+      s.style.backgroundSize=tileSizePx+"px "+tileSizePx+"px";
+      s.style.backgroundPosition="center";
+    }
+    else if(i>0 && bodySkin){
+      s.style.background="none";
+      s.style.backgroundImage=`url(${bodySkin.src})`;
+      s.style.backgroundSize=tileSizePx+"px "+tileSizePx+"px";
+      s.style.backgroundPosition="center";
+    }
+    else{
+      s.style.background=i?"#080":"#0b0";
+    }
+
+    boardEl.appendChild(s);
+  });
+
+  apple.style.width = tileSizePx + "px";
+  apple.style.height = tileSizePx + "px";
+  if (appleSkin) {
+    apple.style.backgroundSize = tileSizePx + "px " + tileSizePx + "px";
+  }
+}
+
+function moveSnake(){
+  let h={...snake[0]};
+
+  if(dr==="down")h.top+=tileSizePx;
+  else if(dr==="up")h.top-=tileSizePx;
+  else if(dr==="right")h.left+=tileSizePx;
+  else h.left-=tileSizePx;
+
+  snake.unshift(h);
+
+  if(h.top==parseInt(apple.style.top)&&h.left==parseInt(apple.style.left)){
+    score++;setApple();playNote(eatF);
+  } else {
+    snake.pop();
+  }
+
+  const maxTop = (unitsY - 1) * tileSizePx;
+  const maxLeft = (unitsX - 1) * tileSizePx;
+
+  if(
+    h.top < 0 ||
+    h.left < 0 ||
+    h.top > maxTop ||
+    h.left > maxLeft ||
+    snake.slice(1).some(p=>p.top==h.top&&p.left==h.left)
+  ){
+    setScore("GAME OVER! "+score);
+    gameOver=true;playNote(gameF);
+    let high=parseInt(localStorage.getItem("snakeHighScore"))||0;
+    if(score>high){localStorage.setItem("snakeHighScore",score);high=score;}
+    setHigh("HIGH SCORE: "+high);
+  } else {
+    renderSnake();
+    setScore("SCORE: "+score);
+  }
+}
+
+/* ---------------- BUTTONS ---------------- */
+startBtn.onclick=()=>{
+  snake=[{top:0,left:0}];
+  dr="right";score=0;gameOver=false;
+  setScore("SCORE: 0");setApple();renderSnake();
+};
+
+resetBtn.onclick=()=>{
+  localStorage.clear();leaderboard.innerHTML="";
+  setHigh("HIGH SCORE: 0");
+};
+
+pauseBtn.onclick=()=>{
+  paused=!paused;
+  pauseBtn.innerHTML=paused?'<i class="fa-solid fa-play"></i> RESUME':'<i class="fa-solid fa-pause"></i> PAUSE';
+};
+
+soundBtn.onclick=()=>{
+  soundOn=!soundOn;
+  soundBtn.innerHTML=soundOn?'<i class="fa-solid fa-volume-up"></i> SOUND ON':'<i class="fa-solid fa-volume-mute"></i> SOUND OFF';
+};
+
+settingsBtn.onclick=()=>{settingsModal.style.display="block";overlay.style.display="block";}
+closeSettings.onclick=overlay.onclick=()=>{settingsModal.style.display="none";overlay.style.display="none";infoModal.style.display="none";}
+infoBtn.onclick=()=>{infoModal.style.display="block";overlay.style.display="block";}
+closeInfo.onclick=()=>{infoModal.style.display="none";overlay.style.display="none";}
+
+document.addEventListener("keydown",e=>{
+  if(gameOver)if(e.key===" "){snake=[{top:0,left:0}];
+  dr="right";score=0;gameOver=false;
+  setScore("SCORE: 0");setApple();renderSnake();}else{return;};
+  if(e.key==="ArrowDown"||e.key==="s")dr="down";
+  else if(e.key==="ArrowUp"||e.key==="w")dr="up";
+  else if(e.key==="ArrowRight"||e.key==="d")dr="right";
+  else if(e.key==="ArrowLeft"||e.key==="a")dr="left";
+});
+
+addButton.onclick=()=>{
+  if(!gameOver)return;
+  let u=usernameInput.value.trim();
+  if(!u)return;
+  let lb=JSON.parse(localStorage.getItem("snakeLeaderboard"))||[],
+  ex=lb.find(e=>e.name===u);
+  if(ex&&score<=ex.score)return;
+  if(ex)ex.score=score;else lb.push({name:u,score:score});
+  lb.sort((a,b)=>b.score-a.score);lb=lb.slice(0,3);
+  localStorage.setItem("snakeLeaderboard",JSON.stringify(lb));
+  leaderboard.innerHTML="<h3>LEADERBOARD</h3>";
+  lb.forEach((e,i)=>{
+    let c=i===0?"gold":i===1?"silver":"bronze";
+    leaderboard.innerHTML+=`<div class="${c}">${i+1}. ${e.name} - ${e.score}</div>`;
+  });
+};
+
+/* ---------------- APPLY SIZE FROM SETTINGS ---------------- */
+document.getElementById("applySize").onclick = () => {
+  const uX = parseInt(document.getElementById("boardUnitsX").value);
+  const uY = parseInt(document.getElementById("boardUnitsY").value);
+  const tS = parseInt(document.getElementById("tileSizeInput").value);
+
+  if (uX <= 0 || uY <= 0 || tS <= 0) {
+    alert("Units and tile size must be positive.");
+    return;
+  }
+
+  unitsX = uX;
+  unitsY = uY;
+  tileSizePx = tS;
+
+  applyBoardSize();
+
+  snake = [{ top: 0, left: 0 }];
+  score = 0;
+  gameOver = false;
+  dr = "right";
+  setScore("SCORE: 0");
+  setApple();
+  renderSnake();
+};
+
+/* ---------------- GAME LOOP ---------------- */
+applyBoardSize();
+setApple();renderSnake();
+
+setInterval(()=>{
+  if(!gameOver&&!paused)moveSnake();
+  framesGet.textContent="Frames: "+String(framesCount);
+  framesCount++;
+},200);
+</script>
+
+
+
+<!-- MOBILE CONTROLS -->
+<button onclick="setDir('u')" class="dirb">&uarr;</button><br>
+<button onclick="setDir('l')" class="dirb">&larr;</button>
+<button onclick="setDir('d')" class="dirb">&darr;</button>
+<button onclick="setDir('r')" class="dirb">&rarr;</button>
+
+</body>
+</html>
